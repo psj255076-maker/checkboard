@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>우리 반 체크판 🍭</title>
+<style>
+body {
+  font-family: 'Noto Sans KR','Nanum Gothic','Apple SD Gothic Neo','맑은 고딕',sans-serif;
+  background: #f0f8ff;
+  margin:20px;
+  font-size:20px;
+  color:#333;
+}
+h2 {
+  text-align:center;
+  font-size:34px;
+  color:#1e88e5;
+  margin-bottom:15px;
+  text-shadow:1px 1px 2px rgba(255,255,255,0.8);
+}
+.nav-container {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+  margin-bottom:15px;
+}
+.nav {
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+button {
+  background:#fff;
+  border:2px solid #90caf9;
+  padding:10px 14px;
+  border-radius:20px;
+  cursor:pointer;
+  font-size:16px;
+  box-shadow:2px 2px 4px rgba(0,0,0,0.1);
+  transition:0.2s;
+}
+button:hover { background:#e3f2fd; transform:scale(1.05); }
+input {
+  background:#e3f2fd;
+  border:2px solid #90caf9;
+  padding:8px 10px;
+  border-radius:12px;
+  font-size:16px;
+  text-align:center;
+}
+.board {
+  border-collapse: collapse;
+  width:100%;
+  margin-top:10px;
+  box-shadow:0 4px 8px rgba(0,0,0,0.15);
+  border-radius:15px;
+  overflow:hidden;
+}
+.board th, .board td {
+  border:1px solid #ddd;
+  padding:14px;
+  text-align:center;
+  font-size:20px;
+}
+.board th { background:#bbdefb; color:#333; }
+.th-일인일역 { background:#eaf7ff; }
+.th-과제 { background:#e6f7e0; }
+.board td { cursor:pointer; transition:0.2s; }
+.board td:hover { background:#f1f8ff; }
+.bottom-input {
+  margin-top:15px;
+  display:flex;
+  gap:8px;
+  justify-content:center;
+}
+#rewards {
+  margin-top:18px;
+  background:#f1f8ff;
+  padding:15px;
+  border-radius:15px;
+  box-shadow:0 3px 6px rgba(0,0,0,0.1);
+  font-size:20px;
+}
+#rewards div { margin:6px 0; }
+.reward-icon { font-size:28px; }
+.completed { text-decoration: line-through; color: gray; }
+</style>
+</head>
+<body>
+<h2>우리 반 체크판 🍭</h2>
+<div class="nav-container">
+  <button onclick="prevPage()">◀ 이전</button>
+  <div class="nav">
+    <button id="toggleTodayBtn" onclick="toggleTodayOnly()">오늘만 체크: ON</button>
+    <button id="switchTypeBtn" onclick="switchType()">체크판 종류: 일인일역</button>
+    기본보상: <input id="basicIcon" value="🍭" style="width:50px;">
+    특별보상: <input id="specialIcon" value="🥳" style="width:50px;">
+    보상배수: <input id="rewardMultiple" type="number" value="5" min="1" style="width:50px;" onchange="loadPage(currentPage)">
+  </div>
+  <button onclick="nextPage()">다음 ▶</button>
+</div>
+<table class="board" id="board"></table>
+<div class="bottom-input">
+  <input type="text" id="newStudentName" placeholder="학생 이름 입력">
+  <button onclick="addStudent()">학생 추가</button>
+</div>
+<h3>✨ 보상 현황 ✨</h3>
+<div id="rewards"></div>
+<script>
+let students=["학생A","학생B","학생C","학생D","학생E","학생F","학생G","학생H","학생I","학생J"];
+let records=JSON.parse(localStorage.getItem("records")||"{}");
+students.forEach(s=>{ if(!records[s]) records[s]={일인일역:{},과제:{}}; });
+let currentPage=1; let todayOnly=true; let boardType="일인일역";
+function getWeekdays(start,num){
+  const arr=[]; let d=new Date(start); const dayNames=["일","월","화","수","목","금","토"];
+  while(arr.length<num){ const day=d.getDay(); if(day>=1 && day<=5){ 
+    const mm=(d.getMonth()+1).toString().padStart(2,"0");
+    const dd=d.getDate().toString().padStart(2,"0");
+    arr.push(`${mm}/${dd} (${dayNames[day]})`);
+  } d.setDate(d.getDate()+1);} return arr;
+}
+let days=getWeekdays(new Date(),200);
+let tasks=Array.from({length:200},(_,i)=>`과제${i+1}`);
+function loadPage(page){
+  const table=document.getElementById("board"); table.innerHTML="";
+  const start=(page-1)*5; const headers=boardType==="일인일역"?days.slice(start,start+5):tasks.slice(start,start+5);
+  let tr="<tr><th>학생명</th>";
+  headers.forEach((h,i)=>{ let cls=(boardType==="일인일역"?"th-일인일역":"th-과제");
+    if(boardType==="과제" && isTaskCompleted(h)) tr+=`<th class="${cls} completed" onclick="editTaskName('${h}',${start+i})">${h}</th>`;
+    else if(boardType==="과제") tr+=`<th class="${cls}" onclick="editTaskName('${h}',${start+i})">${h}</th>`;
+    else tr+=`<th class="${cls}">${h}</th>`; });
+  tr+="</tr>"; table.innerHTML+=tr;
+  students.forEach(s=>{ let row=`<tr><td onclick="editName('${s}')">${s}</td>`;
+    headers.forEach(d=>{ row+=`<td onclick="update('${s}','${d}')">${getCellIcon(s,d)}</td>`; });
+    row+="</tr>"; table.innerHTML+=row; });
+  updateRewards();
+}
+function editName(oldName){ const newName=prompt("새 이름",oldName);
+  if(newName && !students.includes(newName)){ const idx=students.indexOf(oldName); students[idx]=newName;
+    records[newName]=records[oldName]; delete records[oldName]; saveData(); loadPage(currentPage);}}
+function editTaskName(oldName,index){ const newName=prompt("새 과제명",oldName);
+  if(newName){ tasks[index]=newName; saveData(); loadPage(currentPage);}}
+function getCellIcon(stu,date){ if(!records[stu][boardType][date]) return "";
+  let order=getCheckedOrder(stu,date); const multiple=parseInt(document.getElementById("rewardMultiple").value)||5;
+  return (order%multiple===0)? `<span class="reward-icon">${document.getElementById("specialIcon").value}</span>`:`<span class="reward-icon">${document.getElementById("basicIcon").value}</span>`;}
+function getCheckedOrder(stu,date){ const arr=boardType==="일인일역"?days:tasks; let count=0;
+  for(let d of arr){ if(records[stu][boardType][d]) count++; if(d===date) break;} return count; }
+function update(stu,date){ if(todayOnly && boardType==="일인일역"){ const d=new Date();
+    const mm=(d.getMonth()+1).toString().padStart(2,"0"); const dd=d.getDate().toString().padStart(2,"0");
+    const todayStr=`${mm}/${dd}`; if(!date.startsWith(todayStr)){ alert("오늘만 체크 가능합니다!"); return; } }
+  if(records[stu][boardType][date]) delete records[stu][boardType][date]; else records[stu][boardType][date]=true;
+  saveData(); loadPage(currentPage); }
+function toggleTodayOnly(){ todayOnly=!todayOnly; document.getElementById("toggleTodayBtn").innerText="오늘만 체크: "+(todayOnly?"ON":"OFF");}
+function switchType(){ boardType=(boardType==="일인일역")?"과제":"일인일역"; document.getElementById("switchTypeBtn").innerText="체크판 종류: "+boardType; loadPage(currentPage);}
+function addStudent(){ const name=document.getElementById("newStudentName").value.trim(); if(!name) return;
+  if(students.includes(name)){ alert("이미 존재하는 이름"); return;} students.push(name); records[name]={일인일역:{},과제:{}};
+  saveData(); loadPage(currentPage); document.getElementById("newStudentName").value=""; }
+function prevPage(){ if(currentPage>1){currentPage--; loadPage(currentPage);} }
+function nextPage(){ currentPage++; loadPage(currentPage); }
+function saveData(){ localStorage.setItem("records",JSON.stringify(records)); }
+function updateRewards(){ const div=document.getElementById("rewards"); div.innerHTML="";
+  students.forEach(s=>{ let count=0; const arr=boardType==="일인일역"?days:tasks; arr.forEach(d=>{ if(records[s][boardType][d]) count++; });
+    const mult=parseInt(document.getElementById("rewardMultiple").value)||5; let icons="";
+    for(let i=1;i<=count;i++){ icons+=(i%mult===0)? `<span class="reward-icon">${document.getElementById("specialIcon").value}</span>`:`<span class="reward-icon">${document.getElementById("basicIcon").value}</span>`; }
+    div.innerHTML+=`<div>${s} (${count}회): ${icons}</div>`; }); }
+function isTaskCompleted(task){ return students.every(s=>records[s]["과제"][task]); }
+loadPage(currentPage);
+</script>
+</body></html>
